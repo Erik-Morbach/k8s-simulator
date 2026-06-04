@@ -1,14 +1,16 @@
 services:
   master:
-    build: ./master
+    image: master
     container_name: master
+    environment:
+      - WORKER-URLS=http://worker-1:8000,http://worker-2:8000
     ports:
       - "8080:8080"   # dashboard
     networks:
       - k8s-sim
 
   worker-1:
-    build: ./worker
+    image: worker
     container_name: worker-1
     environment:
       - WORKER_ID=worker-1
@@ -19,7 +21,7 @@ services:
       - k8s-sim
 
   worker-2:
-    build: ./worker
+    image: worker
     container_name: worker-2
     environment:
       - WORKER_ID=worker-2
