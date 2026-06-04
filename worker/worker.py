@@ -1,4 +1,5 @@
 from pathlib import Path
+from contextlib import asynccontextmanager
 import subprocess
 import sys
 import tempfile
@@ -8,7 +9,6 @@ from queue import Queue
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-app = FastAPI(title="Worker API")
 taskQueue = Queue()
 
 def worker_task_execution_loop():
@@ -25,9 +25,14 @@ def worker_task_execution_loop():
         except subprocess.TimeoutExpired:
             raise HTTPException(status_code=504, detail="Script execution timed out.")
 
-@app.on_event("startup")
-async def startup_event():
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     asyncio.create_task(worker_task_execution_loop())
+    yield
+
+
+app = FastAPI(title="Worker API", lifespan=lifespan)
 
 @app.post("/execute")
 async def execute_python_file(file: UploadFile = File(...)):
@@ -74,3 +79,6 @@ def status():
             "pending": taskQueue.qsize(),
         }
     }
+
+if __name__ == "__main__":
+    app.run()

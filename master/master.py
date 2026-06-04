@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 import asyncio
 import os
 import time
@@ -40,7 +41,6 @@ class WorkerInfo:
 
 WORKER_URLS = [url.strip() for url in os.environ.get("WORKER_URLS", "").split(",") if url.strip()]
 
-app = FastAPI(title="Master API")
 
 job_queue: asyncio.Queue[Job] = asyncio.Queue()
 jobs: Dict[str, Job] = {}
@@ -51,11 +51,13 @@ queue_lock = asyncio.Lock()
 worker_lock = asyncio.Lock()
 
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     asyncio.create_task(worker_status_loop())
     asyncio.create_task(dispatch_loop())
+    yield
 
+app = FastAPI(title="Master API", lifespan=lifespan)
 
 @app.post("/schedule")
 async def schedule_job(file: UploadFile = File(...)):
