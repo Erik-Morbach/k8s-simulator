@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
+import threading
 import asyncio
+from queue import Queue
 import os
 import time
 import uuid
@@ -42,19 +44,16 @@ class WorkerInfo:
 WORKER_URLS = [url.strip() for url in os.environ.get("WORKER_URLS", "").split(",") if url.strip()]
 
 
-job_queue: asyncio.Queue[Job] = asyncio.Queue()
+job_queue: Queue[Job] = Queue()
 jobs: Dict[str, Job] = {}
 workers: Dict[str, WorkerInfo] = {url: WorkerInfo(url=url) for url in WORKER_URLS}
 
 round_robin_index = 0
-queue_lock = asyncio.Lock()
-worker_lock = asyncio.Lock()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    asyncio.create_task(worker_status_loop())
-    asyncio.create_task(dispatch_loop())
+    threading.Thread(target=worker_status_loop).start()
+    threading.Thread(target=dispatch_loop).start()
     yield
 
 app = FastAPI(title="Master API", lifespan=lifespan)
@@ -72,7 +71,7 @@ async def schedule_job(file: UploadFile = File(...)):
     job = Job(job_id=job_id, filename=file.filename, payload=payload)
     jobs[job_id] = job
 
-    await job_queue.put(job)
+    job_queue.put(job)
 
     return JSONResponse(
         status_code=202,
@@ -82,12 +81,14 @@ async def schedule_job(file: UploadFile = File(...)):
 
 @app.get("/status")
 async def status():
+    global jobs
+    currentJobs = jobs.values()[:]
     master_cpu = psutil.cpu_percent(interval=0.1)
     master_memory = psutil.virtual_memory()
     master_disk = psutil.disk_usage("/")
 
-    queued_jobs = [job for job in jobs.values() if job.status == "queued"]
-    assigned_jobs = [job for job in jobs.values() if job.status == "assigned"]
+    queued_jobs = [job for job in currentJobs if job.status == "queued"]
+    assigned_jobs = [job for job in currentJobs if job.status == "assigned"]
 
     workers_status = []
     for worker in workers.values():
@@ -137,23 +138,27 @@ async def status():
                 "completed_at": job.completed_at,
                 "error": job.error,
             }
-            for job in jobs.values()
+            for job in currentJobs
         ],
     }
 
 
-async def worker_status_loop() -> None:
-    async with httpx.AsyncClient(timeout=10.0) as client:
+def worker_status_loop() -> None:
+    with httpx.Client(timeout=10.0) as client:
         while True:
+            print("Updating workers")
             for worker in workers.values():
-                await update_worker_status(client, worker)
-            await asyncio.sleep(5)
+                update_worker_status(client, worker)
+                print(worker)
+            time.sleep(5)
 
 
-async def update_worker_status(client: httpx.AsyncClient, worker: WorkerInfo) -> None:
+def update_worker_status(client: httpx.Client, worker: WorkerInfo) -> None:
     try:
         start = time.perf_counter()
-        response = await client.get(f"{worker.url}/status")
+        print("At",start)
+        response = client.get(f"{worker.url}/status")
+        print(response)
         elapsed = (time.perf_counter() - start) * 1000.0
         response.raise_for_status()
 
@@ -174,20 +179,20 @@ async def update_worker_status(client: httpx.AsyncClient, worker: WorkerInfo) ->
         worker.disk = None
 
 
-async def dispatch_loop() -> None:
+def dispatch_loop() -> None:
     global round_robin_index
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    with httpx.Client(timeout=60.0) as client:
         while True:
-            job = await job_queue.get()
+            job = job_queue.get()
             assigned = False
 
             healthy_workers = [worker for worker in workers.values() if worker.healthy]
             if not healthy_workers:
                 job.error = "No healthy workers available"
                 job.status = "queued"
-                await job_queue.put(job)
-                await asyncio.sleep(5)
+                job_queue.put(job)
+                time.sleep(5)
                 continue
 
             for _ in range(len(healthy_workers)):
@@ -195,7 +200,7 @@ async def dispatch_loop() -> None:
                 round_robin_index += 1
 
                 try:
-                    await assign_job_to_worker(client, job, worker)
+                    assign_job_to_worker(client, job, worker)
                     assigned = True
                     break
                 except Exception as exc:
@@ -207,17 +212,17 @@ async def dispatch_loop() -> None:
                 job.status = "failed"
                 job.completed_at = time.time()
 
-            await asyncio.sleep(1)
+            time.sleep(1)
 
 
-async def assign_job_to_worker(client: httpx.AsyncClient, job: Job, worker: WorkerInfo) -> None:
+def assign_job_to_worker(client: httpx.Client, job: Job, worker: WorkerInfo) -> None:
     job.status = "assigned"
     job.worker_url = worker.url
     job.assigned_at = time.time()
     worker.assigned_jobs.append(job.job_id)
 
     files = {"file": (job.filename, job.payload, "text/x-python")}
-    response = await client.post(f"{worker.url}/execute", files=files)
+    response = client.post(f"{worker.url}/execute", files=files)
     response.raise_for_status()
 
     result = response.json()

@@ -3,34 +3,37 @@ services:
     image: master
     container_name: master
     environment:
-      - WORKER-URLS=http://worker-1:8000,http://worker-2:8000
+      - WORKER-URLS=http://worker-1:8001,http://worker-2:8002
     ports:
       - "8080:8080"   # dashboard
-    networks:
-      - k8s-sim
-
   worker-1:
     image: worker
     container_name: worker-1
+    ports:
+      - "8000:8000"
     environment:
       - WORKER_ID=worker-1
       - CPU_CORES=4
       - RAM_MB=8192
       - DISK_GB=100
-    networks:
-      - k8s-sim
+    deploy:
+      resources:
+        limits:
+            cpus: '0.50'
+            memory: 512m
 
   worker-2:
     image: worker
     container_name: worker-2
+    ports:
+      - "8002:8000"
     environment:
       - WORKER_ID=worker-2
       - CPU_CORES=2
       - RAM_MB=4096
       - DISK_GB=50
-    networks:
-      - k8s-sim
-
-networks:
-  k8s-sim:
-    driver: bridge
+    deploy:
+      resources:
+        limits:
+            cpus: '0.50'
+            memory: 512m
