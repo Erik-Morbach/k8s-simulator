@@ -1,4 +1,7 @@
 import threading
+import datetime
+from dataclasses import dataclass
+import time
 import uuid
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -9,11 +12,28 @@ from queue import Queue
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
+
+@dataclass
+class Response:
+    id: str
+    out: str
+    err: str
+    startDate: datetime.date
+    duration: float
+
+
 def worker_task_execution_loop(taskQueue):
     global responseData
     global taskMapper
     while True:
         task_id = taskQueue.get()
+        t0 = time.time()
+        responseData[task_id] = Response(id=task_id,
+            out="[Executing]",
+            err="",
+            startDate=datetime.datetime.fromtimestamp(t0),
+            duration=-1
+        )
         target_path = taskMapper[task_id]
         try:
             result = subprocess.run(
@@ -23,9 +43,20 @@ def worker_task_execution_loop(taskQueue):
                 timeout=15,
                 cwd="/tmp",
             )
-            responseData[task_id] = result.stdout, result.stderr
-        except subprocess.TimeoutExpired:
-            responseData[task_id] = "", "Timeout error"
+            t1 = time.time()
+            responseData[task_id] = Response(id=task_id,
+                out=result.stdout,
+                err=result.stderr,
+                startDate=datetime.datetime.fromtimestamp(t0),
+                duration=t1-t0
+            )
+        except Exception as err:
+            responseData[task_id] = Response(id=task_id,
+                out="",
+                err=err,
+                startDate=datetime.datetime.fromtimestamp(t0),
+                duration=-1
+            )
 
 
 @asynccontextmanager
@@ -64,11 +95,13 @@ async def execute_python_file(file: UploadFile = File(...)):
 @app.get("/response/{id}")
 async def get_response_of_execution(id):
     global responseData
-    out, err = responseData[id]
+    response = responseData[id]
     return {
-        "id": id,
-        "stdout": out,
-        "stderr": err,
+        "id": response.id,
+        "startDate": response.startDate,
+        "duration": response.duration,
+        "stderr": response.err,
+        "stdout": response.out
     }
 
 @app.get("/status")
