@@ -82,7 +82,7 @@ async def schedule_job(file: UploadFile = File(...)):
 @app.get("/status")
 async def status():
     global jobs
-    currentJobs = jobs.values()[:]
+    currentJobs = jobs.values()
     master_cpu = psutil.cpu_percent(interval=0.1)
     master_memory = psutil.virtual_memory()
     master_disk = psutil.disk_usage("/")
@@ -146,19 +146,15 @@ async def status():
 def worker_status_loop() -> None:
     with httpx.Client(timeout=10.0) as client:
         while True:
-            print("Updating workers")
             for worker in workers.values():
                 update_worker_status(client, worker)
-                print(worker)
             time.sleep(5)
 
 
 def update_worker_status(client: httpx.Client, worker: WorkerInfo) -> None:
     try:
         start = time.perf_counter()
-        print("At",start)
         response = client.get(f"{worker.url}/status")
-        print(response)
         elapsed = (time.perf_counter() - start) * 1000.0
         response.raise_for_status()
 
@@ -234,7 +230,11 @@ def assign_job_to_worker(client: httpx.Client, job: Job, worker: WorkerInfo) -> 
     
 
 
-if not WORKER_URLS:
-    @app.get("/config")
-    def config_notice():
-        return {"detail": "Set WORKER_URLS environment variable to enable worker health checks and dispatch."}
+@app.post("/config")
+def config_notice(worker_url: str):
+    global WORKER_URLS 
+    worker_url = worker_url.strip()
+    WORKER_URLS += [worker_url]
+    global workers
+    workers[worker_url] = WorkerInfo(url=worker_url)
+    return {"msg": f"{worker_url} configured"}

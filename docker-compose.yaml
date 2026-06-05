@@ -3,23 +3,18 @@ services:
     image: master
     container_name: master
     environment:
-      - WORKER-URLS=http://worker-1:8001,http://worker-2:8002
+      - WORKER_URLS=http://host.docker.internal:8001,http://host.docker.internal:8002
     ports:
-      - "8080:8080"   # dashboard
+      - "8080:8000"
   worker-1:
     image: worker
     container_name: worker-1
     ports:
-      - "8000:8000"
-    environment:
-      - WORKER_ID=worker-1
-      - CPU_CORES=4
-      - RAM_MB=8192
-      - DISK_GB=100
+      - "8001:8000"
     deploy:
       resources:
         limits:
-            cpus: '0.50'
+            cpus: '1'
             memory: 512m
 
   worker-2:
@@ -27,13 +22,8 @@ services:
     container_name: worker-2
     ports:
       - "8002:8000"
-    environment:
-      - WORKER_ID=worker-2
-      - CPU_CORES=2
-      - RAM_MB=4096
-      - DISK_GB=50
     deploy:
       resources:
         limits:
-            cpus: '0.50'
+            cpus: '1'
             memory: 512m
