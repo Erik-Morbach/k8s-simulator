@@ -1,4 +1,5 @@
 import threading
+import os
 import datetime
 from dataclasses import dataclass
 import time
@@ -114,6 +115,9 @@ def status():
     cpu_percent = psutil.cpu_percent(interval=0.1)
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
+
+    latency = int(os.environ.get("LAT", ""))
+    time.sleep(latency/1000)
 
     return {
         "cpu": {

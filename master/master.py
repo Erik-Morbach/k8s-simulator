@@ -21,6 +21,7 @@ class Job:
     payload: bytes
     status: str = "queued"
     queued_at: float = field(default_factory=time.time)
+    allocation_type: str = "any"
     assigned_at: Optional[float] = None
     completed_at: Optional[float] = None
     worker_url: Optional[str] = None
@@ -41,6 +42,20 @@ class WorkerInfo:
     executed: int = 0
     pending: int = 0
     error: Optional[str] = None
+
+
+def calculate_worker_score(job: Job, worker: WorkerInfo):
+    match(job.allocation_type):
+        case "any":
+            return 1
+        case "memory":
+            return 1
+        case "latency":
+            return 1
+        case "start":
+            return 1
+
+
 
 
 WORKER_URLS = [url.strip() for url in os.environ.get("WORKER_URLS", "").split(",") if url.strip()]
