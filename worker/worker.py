@@ -109,12 +109,12 @@ async def get_response_of_execution(id):
     global responseData
     response = responseData[id]
     return JSONResponse(content={
-        "id": response.id,
-        "completed": response.completed,
+        "id": str(response.id),
+        "completed": str(response.completed),
         "startDate": str(response.startDate),
-        "duration": response.duration,
-        "stderr": response.err,
-        "stdout": response.out
+        "duration": str(response.duration),
+        "stderr": str(response.err),
+        "stdout": str(response.out)
     })
 
 @app.get("/status")
