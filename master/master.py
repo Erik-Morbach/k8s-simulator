@@ -109,15 +109,15 @@ async def status():
         "master": {
             "cpu": master_cpu,
             "memory": {
-                "total": master_memory.total,
-                "available": master_memory.available,
-                "used": master_memory.used,
+                "total": f"%.3f Gb" % (master_memory.total/(1024**3)),
+                "available": f"%.3f Gb" % (master_memory.available/(1024**3)),
+                "used": f"%.3f Gb" % (master_memory.used/(1024**3)),
                 "percent": master_memory.percent,
             },
             "disk": {
-                "total": master_disk.total,
-                "used": master_disk.used,
-                "free": master_disk.free,
+                "total": f"%.3f Gb" % (master_disk.total/(1024**3)),
+                "used": f"%.3f Gb" % (master_disk.used/(1024**3)),
+                "free": f"%.3f Gb" % (master_disk.free/(1024**3)),
                 "percent": master_disk.percent,
             },
             "queue": {

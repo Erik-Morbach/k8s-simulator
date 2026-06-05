@@ -84,7 +84,7 @@ async def execute_python_file(file: UploadFile = File(...)):
     target_path = Path("/tmp") / file.filename
     contents = await file.read()
     target_path.write_bytes(contents)
-    id = str(uuid.uuid4())
+    id = uuid.uuid4().hex
     taskMapper[id] = target_path
     taskQueue.put(id)
     return {
