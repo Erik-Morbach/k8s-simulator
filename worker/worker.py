@@ -25,9 +25,11 @@ class Response:
 def worker_task_execution_loop(taskQueue):
     global responseData
     global taskMapper
+    global taskCounter
     while True:
         task_id = taskQueue.get()
         t0 = time.time()
+        taskCounter += 1
         responseData[task_id] = Response(id=task_id,
             out="[Executing]",
             err="",
@@ -61,9 +63,11 @@ def worker_task_execution_loop(taskQueue):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global taskCounter
     global taskQueue
     global responseData
     global taskMapper
+    taskCounter = 0
     responseData = {}
     taskMapper = {}
     taskQueue = Queue()
@@ -106,6 +110,7 @@ async def get_response_of_execution(id):
 
 @app.get("/status")
 def status():
+    global taskCounter
     cpu_percent = psutil.cpu_percent(interval=0.1)
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
@@ -127,6 +132,7 @@ def status():
             "percent": disk.percent,
         },
         "tasks": {
+            "executed": taskCounter,
             "pending": taskQueue.qsize(),
         }
     }

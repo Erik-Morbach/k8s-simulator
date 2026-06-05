@@ -38,6 +38,8 @@ class WorkerInfo:
     latency_ms: Optional[float] = None
     last_seen: Optional[float] = None
     assigned_jobs: List[str] = field(default_factory=list)
+    executed: int = 0
+    pending: int = 0
     error: Optional[str] = None
 
 
@@ -102,6 +104,8 @@ async def status():
                 "disk": worker.disk,
                 "error": worker.error,
                 "assigned_jobs": worker.assigned_jobs,
+                "executed": worker.executed,
+                "pending": worker.pending,
             }
         )
 
@@ -166,6 +170,8 @@ def update_worker_status(client: httpx.Client, worker: WorkerInfo) -> None:
         worker.memory = data.get("memory")
         worker.disk = data.get("disk")
         worker.error = None
+        worker.executed = data.get("tasks", {}).get("executed")
+        worker.pending = data.get("tasks", {}).get("pending")
     except Exception as exc:
         worker.healthy = False
         worker.error = str(exc)
